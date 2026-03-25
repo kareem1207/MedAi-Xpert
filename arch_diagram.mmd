@@ -1,0 +1,35 @@
+flowchart LR
+  Browser[User Browser\n(JS frontend)]
+  Browser -->|GET /| StaticHTML[Static HTML + JS (templates/index_fastapi.html)]
+  Browser -->|POST /predict| API[FastAPI (uvicorn)\n/api.py]
+  Browser -->|GET /config| API
+  API -->|loads| Model[Model Pipeline\nmodels/xgboost_pipeline.pkl (joblib)]
+  API -->|compute| SHAP[SHAP Explainer\nTreeExplainer -> PNG: static/shap_<id>.png]
+  API -->|calls| LLM[Local LLM Server\nspawned subprocess or external URL from .env]
+  LLM -->|HTTP response| API
+  API -->|serves| StaticFiles[/static/*]
+  API -->|reads/writes| Env[.env (LLM paths, args)]
+  Model -->|trained on| Dataset[dataset/healthcare-dataset-stroke-data.csv]
+  subgraph ServerProcess[Server Host]
+    API
+    Model
+    SHAP
+    LLM
+    StaticFiles[/static]
+    Env
+  end
+  API -->|logs/metrics| Monitoring[(Logging / Metrics)]
+  Browser -->|view| Results[Prediction + Readable Text + SHAP Image + Suggestions]
+  Results -->|optionally| Download[(Export PPT/PNG/Report)]
+  click Model href "models/xgboost_pipeline.pkl" "Model file"
+
+  classDef comp fill:#f9f9f9,stroke:#333,stroke-width:1px;
+  class API,Model,SHAP,LLM,StaticFiles,Env,Dataset comp;
+
+  %% Notes
+  subgraph Notes[ ]
+    N1[Startup sequence: FastAPI startup checks `LLAMA_SERVER_URL`; if unreachable and `LLAMA_SERVER_EXE` set, spawn subprocess; attach shutdown handler to terminate it.]
+    N2[Frontend: static JS builds form from `/config` and posts JSON to `/predict`.]
+  end
+  N1 -.-> ServerProcess
+  N2 -.-> Browser
